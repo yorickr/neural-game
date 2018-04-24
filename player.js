@@ -9,7 +9,7 @@ class Player {
         this.radius = 0;
         this.angle = 0;
         this.accel = 1;
-        this.innerColor = "green";
+        this.good = true;
         this.boundingBox = {
             x: 0,
             y: 0,
@@ -19,6 +19,7 @@ class Player {
         this.parent = null;
         this.hitCount = 0; // times hit by enemy
         this.points = 0; // times the enemy was hit.
+        this.fitness = 0;
 
         this.timeSinceShot = 0;
 
@@ -34,6 +35,10 @@ class Player {
         return p;
     }
 
+    fitness() {
+
+    }
+
     draw(ctx) {
         ctx.save();
         ctx.beginPath();
@@ -41,7 +46,7 @@ class Player {
         ctx.rotate(this.angle * Math.PI / 180);
         ctx.translate(-this.x, -this.y);
         ctx.arc(this.x, this.y, this.radius * 2, 0, 2 * Math.PI, false);
-        ctx.fillStyle = this.innerColor;
+        ctx.fillStyle = this.good ? "green" : "red";
         ctx.fill();
         ctx.lineWidth = 5;
         ctx.strokeStyle = '#003300';
@@ -66,7 +71,7 @@ class Player {
         }
     }
 
-    think(enemy, bullet) {
+    think(enemy) {
         // give nn inputs
         
         var inputs = [
@@ -89,6 +94,7 @@ class Player {
         var angle = outputs[0];
         var speed = outputs[1];
         var shoot = outputs[2];
+        // console.log(outputs);
 
         this.angle += 360/4 * angle;
         this.accel = (speed > 0.5 ? 1 : -1) * 10;
@@ -99,7 +105,7 @@ class Player {
 
     fire() {
         var bullet = undefined;
-        if (this.timeSinceShot >= 100) {
+        if (this.timeSinceShot >= 60) {
             bullet = new Circle();
             bullet.x = this.x;
             bullet.y = this.y;

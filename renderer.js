@@ -20,16 +20,20 @@ var height = canvas.height;
 
 const objects = [];
 
-const pastPlayers = [];
+const players = [];
 var playerPos = 0;
+const playerSize = 6; // generation
 
 
 var seconds = 0;
 var count = 0;
 const updateInterval = 30;
 
+var generation = 0;
+const oldGenerations = [];
+
 document.addEventListener('keypress', (event) => {
-    console.log(event);
+    // console.log(event);
     switch(event.key) {
         case 'n':
             console.log("Starting new generation");
@@ -72,32 +76,35 @@ const intersectCircle = (obj1, obj2) => {
 };
 
 const init = () => {
-    c1 = new Player();
-    c1.x = width/4;
-    c1.y = height/2;
-    c1.radius = 10;
-    c1.angle = 0;
-    c1.boundingBox = {
-        x: 0,
-        y: 0,
-        width: width/2,
-        height: height
-    };
+    // make playerSize amount of player pairs
+    for (let i = 0; i < playerSize; i++) {
+        c1 = new Player();
+        c1.x = width/4;
+        c1.y = height/2;
+        c1.radius = 10;
+        c1.angle = 0;
+        c1.boundingBox = {
+            x: 0,
+            y: 0,
+            width: width/2,
+            height: height
+        };
 
-    c2 = new Player();
-    c2.x = width*3/4;
-    c2.y = height/2;
-    c2.radius = 10;
-    c2.innerColor = "red";
-    c2.boundingBox = {
-        x: width/2,
-        y: 0,
-        width: width/2,
-        height: height
-    };
-    c2.angle = 180;
-
-    pastPlayers.push([c1, c2]);
+        c2 = new Player();
+        c2.x = width*3/4;
+        c2.y = height/2;
+        c2.radius = 10;
+        c2.good = false;
+        c2.boundingBox = {
+            x: width/2,
+            y: 0,
+            width: width/2,
+            height: height
+        };
+        c2.angle = 180;
+        players.push([c1, c2]);
+    }
+    
     playerPos = 0;
 };
 
@@ -124,9 +131,40 @@ const render = () => {
     for (dw of objects) {
         dw.draw(ctx);
     }
-    for (pl of pastPlayers[playerPos]) {
+    for (pl of players[playerPos]) {
         pl.draw(ctx);
     }
+};
+
+const sumForParam = (cur, next, param) => {
+    return cur + next[param];
+};
+
+const evolve = () => {
+    let allPlayersFlat = players.reduce((cur, next) => {
+        cur.push(...next);
+        return cur;
+    }, []);
+    // gotta go fest
+    allPlayersFlat.forEach(player => {
+        player.points = Math.pow(player.points, 2);
+        player.hitCount = Math.pow(player.hitCount, 2);
+    });
+    // hit points is good
+    let sumPoints = allPlayersFlat.reduce((c, n) => sumForParam(c, n, "points"), 0);
+
+    // be hit is bad
+    let sumHits = allPlayersFlat.reduce((c, n) => sumForParam(c, n, "hitCount"), 0);
+
+    allPlayersFlat.forEach((player) => {
+        // TODO: fix
+        if (sumPoints !== 0) {
+            player.fitness = (player.points / sumPoints);
+        }
+    });
+
+    // make new generation with existing players.
+
 };
 
 
@@ -135,7 +173,7 @@ const update = () => {
         let movable = objects[i];
 
         // collision
-        for (pl of pastPlayers[playerPos]) {
+        for (pl of players[playerPos]) {
             if (movable.parent !== pl) {
                 if (intersectCircle(pl, movable)) {
                     console.log("Circle intersects with player!");
@@ -154,7 +192,7 @@ const update = () => {
         }
     }
 
-    for (pl of pastPlayers[playerPos]) {
+    for (pl of players[playerPos]) {
         if (Math.random() < 0.01) {
             var bullet = pl.fire();
             if (bullet) {
@@ -162,35 +200,15 @@ const update = () => {
             }
         }
         // pass on the nearest enemy
-        var enemy = pastPlayers[playerPos].filter((val) => {
+        var enemy = players[playerPos].filter((val) => {
             return val !== pl;
         })[0];
-        objects.sort((a, b) => {
-            let disA = Math.sqrt(
-                Math.pow(a.x - pl.x, 2) +
-                Math.pow(a.y - pl.y, 2)
-            );
-            let disB = Math.sqrt(
-                Math.pow(b.x - pl.x, 2) +
-                Math.pow(b.y - pl.y, 2)
-            );
-            if (disA < disB) {
-                return -1;
-            } else if (disA > disB) {
-                return 1;
-            } else {
-                return 0;
-            }
-        });
-        // console.log(bullets);
-        if (objects[0]) {
-            pl.think(enemy, objects[0]);
-        } else {
-            pl.think(enemy, null);
-        }
+        pl.think(enemy);
         pl.move(1);
     }
-
+    debugger;
+    console.log("Evolving");
+    evolve();
     // GA fit condition
     // hitcount
     count++;
@@ -199,8 +217,17 @@ const update = () => {
         console.log(seconds);
     }
     if (seconds / 10 == 1) {
-        console.log("Evolving");
-
+        if (playerPos < playerSize - 1) {
+            console.log("Letting next pair play");
+            playerPos++;
+            objects.length = 0;
+        } else {
+            // time for a new generation.
+            playerPos = 0;
+            console.log("Evolving");
+            evolve();
+        }
+        
         seconds = 0;
     }
 };
