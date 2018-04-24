@@ -1,0 +1,25 @@
+{
+  "name": "neural-game",
+  "version": "1.0.0",
+  "description": "A minimal Electron application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "repository": "",
+  "keywords": [
+    "electron",
+    "neural",
+    "network",
+    "game",
+    "demo"
+  ],
+  "author": "GitHub",
+  "license": "",
+  "devDependencies": {
+    "electron": "^1.8.4"
+  },
+  "dependencies": {
+    "electron-reload": "^1.2.2"
+  }
+}
