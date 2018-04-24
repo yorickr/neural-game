@@ -98,7 +98,7 @@ const init = () => {
     c2.angle = 180;
 
     pastPlayers.push([c1, c2]);
-    objects.push(c1, c2);
+    playerPos = 0;
 };
 
 init();
@@ -124,6 +124,9 @@ const render = () => {
     for (dw of objects) {
         dw.draw(ctx);
     }
+    for (pl of pastPlayers[playerPos]) {
+        pl.draw(ctx);
+    }
 };
 
 
@@ -131,66 +134,17 @@ const update = () => {
     for (let i = 0; i < objects.length; i++) {
         let movable = objects[i];
 
-        // check against all other objects if collides.
-
-        for (let j = 0; j < objects.length; j++) {
-            let movable2 = objects[j];
-            let bothPlayer = (movable instanceof Player && movable2 instanceof Player);
-            let bothCircle = (movable instanceof Circle && movable2 instanceof Circle);
-            // if not same object, if not both player, if not both circle, if not the shooter
-            if (movable !== movable2 && !bothPlayer && !bothCircle && movable.parent !== movable2 && movable2.parent !== movable) {
-                if (intersectCircle(movable, movable2)) {
-                    console.log("These circles intersect!");
-                    if (!(movable instanceof Player)) { // if movable the circle
-                        objects.splice(i, 1);
-                        movable2.hitCount++;
-                    } else { // movable2 is the circle
-                        objects.splice(j, 1);
-                        movable.hitCount++;
-                    }
+        // collision
+        for (pl of pastPlayers[playerPos]) {
+            if (movable.parent !== pl) {
+                if (intersectCircle(pl, movable)) {
+                    console.log("Circle intersects with player!");
+                    objects.splice(i, 1);
+                    pl.hitCount++;
                 }
-            }
-
-        }
-        // fire
-        if (movable instanceof Player) {
-            if (Math.random() < 0.01) {
-                var bullet = movable.fire();
-                if (bullet) {
-                    objects.push(bullet);
-                }
-            }
-            // pass on the nearest enemy
-            var enemy = players[playerPos].filter((val) => {
-                return val !== movable;
-            })[0];
-            var bullets = objects.filter((val) => {
-                return val instanceof Circle;
-            });
-            bullets.sort((a, b) => {
-                let disA = Math.sqrt(
-                    Math.pow(a.x - movable.x, 2) +
-                    Math.pow(a.y - movable.y, 2)
-                );
-                let disB = Math.sqrt(
-                    Math.pow(b.x - movable.x, 2) +
-                    Math.pow(b.y - movable.y, 2)
-                );
-                if (disA < disB) {
-                    return -1;
-                } else if (disA > disB) {
-                    return 1;
-                } else {
-                    return 0;
-                }
-            });
-            // console.log(bullets);
-            if (bullets[0]) {
-                movable.think(enemy, bullets[0]);
-            } else {
-                movable.think(enemy, null);
             }
         }
+        
         // move
         movable.move(1);
         // delete if too far
@@ -198,6 +152,43 @@ const update = () => {
             // delete
             objects.splice(i, 1);
         }
+    }
+
+    for (pl of pastPlayers[playerPos]) {
+        if (Math.random() < 0.01) {
+            var bullet = pl.fire();
+            if (bullet) {
+                objects.push(bullet);
+            }
+        }
+        // pass on the nearest enemy
+        var enemy = pastPlayers[playerPos].filter((val) => {
+            return val !== pl;
+        })[0];
+        objects.sort((a, b) => {
+            let disA = Math.sqrt(
+                Math.pow(a.x - pl.x, 2) +
+                Math.pow(a.y - pl.y, 2)
+            );
+            let disB = Math.sqrt(
+                Math.pow(b.x - pl.x, 2) +
+                Math.pow(b.y - pl.y, 2)
+            );
+            if (disA < disB) {
+                return -1;
+            } else if (disA > disB) {
+                return 1;
+            } else {
+                return 0;
+            }
+        });
+        // console.log(bullets);
+        if (objects[0]) {
+            pl.think(enemy, objects[0]);
+        } else {
+            pl.think(enemy, null);
+        }
+        pl.move(1);
     }
 
     // GA fit condition
