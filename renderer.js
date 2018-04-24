@@ -6,6 +6,12 @@ console.log("Running renderer");
 
 // Include synaptic for NN
 
+var synaptic = require('synaptic');
+var {Neuron,Layer, Network, Trainer, Architect} = synaptic;
+
+const Player = require("./player.js");
+const Circle = require("./circle.js");
+const ShooterNetwork = require("./network.js");
 
 var canvas = document.getElementById("my_canvas");
 var ctx = canvas.getContext("2d");
@@ -13,90 +19,56 @@ var width = canvas.width;
 var height = canvas.height;
 
 const objects = [];
-const players = [];
 
-class Circle {
-    constructor() {
-        this.x = 0;
-        this.y = 0;
-        this.radius = 0;
-        this.angle = 0;
-        this.accel = 1;
-        this.innerColor = "green";
-    }
+const pastPlayers = [];
+var playerPos = 0;
 
-    draw(ctx) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius * 2, 0, 2 * Math.PI, false);
-        ctx.fillStyle = this.innerColor;
-        ctx.fill();
-        ctx.lineWidth = 5;
-        ctx.strokeStyle = '#003300';
-        ctx.stroke();
-        ctx.restore();
-    }
 
-    move(deltatime) {
-        this.x += deltatime * this.accel * Math.cos(this.angle * Math.PI/180);
-        this.y += deltatime * this.accel * Math.sin(this.angle * Math.PI/180);
-    }
-};
+var seconds = 0;
+var count = 0;
+const updateInterval = 30;
 
-class Player {
-    constructor() {
-        this.x = 0;
-        this.y = 0;
-        this.radius = 0;
-        this.angle = 0;
-        this.accel = 1;
-        this.innerColor = "green";
-        this.boundingBox = {
-            x: 0,
-            y: 0,
-            width: 0,
-            height: 0
-        };
+document.addEventListener('keypress', (event) => {
+    console.log(event);
+    switch(event.key) {
+        case 'n':
+            console.log("Starting new generation");
+            break;
     }
+});
 
-    draw(ctx) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.angle * Math.PI / 180);
-        ctx.translate(-this.x, -this.y);
-        ctx.arc(this.x, this.y, this.radius * 2, 0, 2 * Math.PI, false);
-        ctx.fillStyle = this.innerColor;
-        ctx.fill();
-        ctx.lineWidth = 5;
-        ctx.strokeStyle = '#003300';
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(this.x, this.y);
-        ctx.lineTo(this.x + this.radius*2,this.y);
-        ctx.stroke();
-        ctx.restore();
-    }
 
-    move(deltatime) {
-        if (this.x >= this.boundingBox.x && this.x <= this.boundingBox.x + this.boundingBox.width) {
-            this.x += deltatime * this.accel * Math.cos(this.angle * Math.PI/180);
-        }
-        if (this.y >= this.boundingBox.y && this.y <= this.boundingBox.y + this.boundingBox.height) {
-            this.y += deltatime * this.accel * Math.sin(this.angle * Math.PI/180);
-        }
-        this.angle += 10;
-    }
 
-    fire() {
-        var bullet = new Circle();
-        bullet.x = this.x;
-        bullet.y = this.y;
-        bullet.angle = this.angle;
-        bullet.radius = 1;
-        bullet.accel = 10;
-        objects.push(bullet);
-    }
+// NN inputs
+// own speed & angle
+// dis to nearest enemy bullet
+// enemy player's x and y
+// time to next shot
+
+// NN outputs
+// angle of the next move.
+// speed of the next move.
+// to shoot or not.
+
+// var myPerceptron = new ShooterNetwork(2,3,1);
+// var myTrainer = new Trainer(myPerceptron);
+
+// console.log(myTrainer.XOR()); 
+
+// for (let i = 0; i < 2; i++) {
+//     for (let j = 0; j < 2; j++) {
+//         console.log(myPerceptron.activate([i,j]));
+//     }
+// }
+
+const intersectCircle = (obj1, obj2) => {
+    let dist = Math.sqrt(
+        Math.pow(obj1.x - obj2.x, 2) + Math.pow(obj1.y - obj2.y, 2)
+    );
+    if (dist < obj1.radius + obj2.radius) {
+        return true;
+    } 
+    return false;
 };
 
 const init = () => {
@@ -125,7 +97,7 @@ const init = () => {
     };
     c2.angle = 180;
 
-    players.push(c1, c2);
+    pastPlayers.push([c1, c2]);
     objects.push(c1, c2);
 };
 
@@ -154,23 +126,93 @@ const render = () => {
     }
 };
 
-const update = () => {
-    for (player of players) {
-        if (Math.random() < 0.01) {
-            player.fire();
-        }
-    }
-    
+
+const update = () => {    
     for (let i = 0; i < objects.length; i++) {
         let movable = objects[i];
+
+        // check against all other objects if collides.
+
+        for (let j = 0; j < objects.length; j++) {
+            let movable2 = objects[j];
+            let bothPlayer = (movable instanceof Player && movable2 instanceof Player);
+            let bothCircle = (movable instanceof Circle && movable2 instanceof Circle);
+            // if not same object, if not both player, if not both circle, if not the shooter
+            if (movable !== movable2 && !bothPlayer && !bothCircle && movable.parent !== movable2 && movable2.parent !== movable) {
+                if (intersectCircle(movable, movable2)) {
+                    console.log("These circles intersect!");
+                    if (!(movable instanceof Player)) { // if movable the circle
+                        objects.splice(i, 1);
+                        movable2.hitCount++;
+                    } else { // movable2 is the circle
+                        objects.splice(j, 1);
+                        movable.hitCount++;
+                    }
+                }
+            }
+
+        }
+        // fire
+        if (movable instanceof Player) {
+            if (Math.random() < 0.01) {
+                var bullet = movable.fire();
+                if (bullet) {
+                    objects.push(bullet);
+                }
+            }
+            // pass on the nearest enemy
+            var enemy = players[playerPos].filter((val) => {
+                return val !== movable;
+            })[0];
+            var bullets = objects.filter((val) => {
+                return val instanceof Circle;
+            });
+            bullets.sort((a, b) => {
+                let disA = Math.sqrt(
+                    Math.pow(a.x - movable.x, 2) +
+                    Math.pow(a.y - movable.y, 2)
+                );
+                let disB = Math.sqrt(
+                    Math.pow(b.x - movable.x, 2) +
+                    Math.pow(b.y - movable.y, 2)
+                );
+                if (disA < disB) {
+                    return -1;
+                } else if (disA > disB) {
+                    return 1;
+                } else {
+                    return 0;
+                }
+            });
+            // console.log(bullets);
+            if (bullets[0]) {
+                movable.think(enemy, bullets[0]);
+            } else {
+                movable.think(enemy, null);
+            }
+        }
+        // move
         movable.move(1);
+        // delete if too far
         if (movable.x < 0 || movable.x > width || movable.y < 0 || movable.y > height) {
             // delete
             objects.splice(i, 1);
         }
     }
 
+    // GA fit condition
+    // hitcount
+    count++;
+    if (count % updateInterval == 0) {
+        seconds++;
+        console.log(seconds);
+    }
+    if (seconds / 10 == 1) {
+        console.log("Evolving");
+
+        seconds = 0;
+    }
 };
 
 setInterval(render, 1000/60);
-setInterval(update, 1000/30);
+setInterval(update, 1000/updateInterval);
